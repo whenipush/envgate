@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package envgate.v1;
+
+option go_package = "github.com/whenipush/envgate/gen/go/envgate/v1;envgatev1";
+
+service EnvGateService {
+  rpc PullSecrets (PullSecretsRequest) returns (PullSecretsResponse);
+}
+
+message PullSecretsRequest {
+  string token = 1;
+}
+
+message PullSecretsResponse {
+  string project_name = 1;
+  string environment  = 2;
+  map<string, string> variables = 3;
+}

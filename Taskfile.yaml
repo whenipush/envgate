@@ -1,0 +1,51 @@
+version: '3'
+
+vars:
+  MODULE_NAME: github.com/whenipush/envgate
+  PROTO_SRC: proto/envgate.proto
+  GEN_GO_DIR: gen/go
+
+tasks:
+  default:
+    desc: Показать список всех доступных команд
+    cmds:
+      - task --list
+
+  proto:
+    desc: Сгенерировать Go-код из .proto контракта
+    cmds:
+      - mkdir -p {{.GEN_GO_DIR}}
+      - |
+        protoc --go_out=. --go_opt=module={{.MODULE_NAME}} \
+               --go-grpc_out=. --go-grpc_opt=module={{.MODULE_NAME}} \
+               {{.PROTO_SRC}}
+    sources:
+      - "{{.PROTO_SRC}}"
+    generates:
+      - "{{.GEN_GO_DIR}}/**/*.go"
+
+  build:server:
+    desc: Скомпилировать бинарник сервера (envgated)
+    cmds:
+      - go build -o bin/envgated cmd/envgated/main.go
+
+  build:agent:
+    desc: Скомпилировать бинарник агента (envgate-agent)
+    cmds:
+      - go build -o bin/envgate-agent cmd/envgate-agent/main.go
+
+  build:all:
+    desc: Скомпилировать и сервер, и агент
+    deps: [build:server, build:agent]
+
+  run:server:
+    desc: Запустить сервер локально (с авто-генерацией proto при изменениях)
+    deps: [proto]
+    cmds:
+      - go run cmd/envgated/main.go
+
+  clean:
+    desc: Удалить сгенерированные файлы и бинарники
+    cmds:
+      - rm -rf bin/
+      - rm -rf {{.GEN_GO_DIR}}

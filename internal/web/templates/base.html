@@ -1,0 +1,28 @@
+{{ define "base" }}
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>EnvGate Admin</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script src="/assets/htmx.min.js"></script>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen">
+    <nav class="bg-slate-800 border-b border-slate-700 p-4 shadow-md">
+        <div class="container mx-auto flex justify-between items-center">
+            <h1 class="text-xl font-black tracking-wider text-emerald-400">
+                <a href="/admin/projects">🚪 ENVGATE</a>
+            </h1>
+            <span class="text-sm text-slate-400">Панель управления секретами</span>
+        </div>
+    </nav>
+    <main class="container mx-auto p-6">
+        {{ if eq .Page "projects" }}
+            {{ template "projects_content" . }}
+        {{ else if eq .Page "project_detail" }}
+            {{ template "detail_content" . }}
+        {{ end }}
+    </main>
+</body>
+</html>
+{{ end }}

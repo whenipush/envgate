@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  envgate:
+    build:
+      context: .
+    container_name: envgate
+    ports:
+      - "${GRPC_PORT}:${GRPC_PORT}"
+      - "${REST_PORT}:${REST_PORT}"
+    environment:
+      - GRPC_PORT=${GRPC_PORT}
+      - REST_PORT=${REST_PORT}
+      - MASTER_KEY=${MASTER_KEY}
+      - DB_PATH=/app/data/${DB_PATH}
+      - AUTH_USERNAME=${AUTH_USERNAME}
+      - AUTH_PASSWORD=${AUTH_PASSWORD}
+    volumes:
+      - envgate-data:/app/data
+
+volumes:
+  envgate-data:
