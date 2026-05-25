@@ -96,3 +96,30 @@ func (r *repository) Delete(ctx context.Context, bucket entity.Bucket, key []byt
 		return b.Delete(key)
 	})
 }
+func (r *repository) Scan(ctx context.Context, bucket entity.Bucket, cb func(k, v []byte) error) error {
+	ctx, cancel := context.WithTimeout(ctx, defaultTimeout)
+	defer cancel()
+
+	return r.db.View(func(tx *bbolt.Tx) error {
+		b := tx.Bucket([]byte(bucket))
+		if b == nil {
+			return nil
+		}
+
+		return b.ForEach(func(k, v []byte) error {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
+			}
+
+			keyCopy := make([]byte, len(k))
+			copy(keyCopy, k)
+
+			valCopy := make([]byte, len(v))
+			copy(valCopy, v)
+
+			return cb(keyCopy, valCopy)
+		})
+	})
+}

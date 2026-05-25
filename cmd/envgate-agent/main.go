@@ -2,12 +2,14 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 	"os/exec"
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 
 	pb "github.com/whenipush/envgate/gen/go/envgate/v1"
@@ -15,11 +17,19 @@ import (
 )
 
 func main() {
-
 	agentCfg := cfg.MustLoadConfigAgent()
 
 	if agentCfg.Auth.Token == "" {
 		log.Fatal("Critical error: ENVGATE_TOKEN environment variable is required")
+	}
+
+	var creds grpc.DialOption
+	if agentCfg.Server.Insecure {
+		log.Println("Warning: Connecting using insecure plaintext connection!")
+		creds = grpc.WithTransportCredentials(insecure.NewCredentials())
+	} else {
+		log.Println("Connecting using secure TLS connection...")
+		creds = grpc.WithTransportCredentials(credentials.NewClientTLSFromCert(nil, ""))
 	}
 
 	log.Printf("Connecting to envgate server at %s...", agentCfg.Server.Address)
@@ -28,7 +38,7 @@ func main() {
 	defer cancel()
 
 	conn, err := grpc.DialContext(ctx, agentCfg.Server.Address,
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		creds,
 		grpc.WithBlock(),
 	)
 	if err != nil {
@@ -50,9 +60,6 @@ func main() {
 	}
 
 	log.Printf("Successfully loaded %d variables!", len(res.Variables))
-	for key, value := range res.Variables {
-		_ = os.Setenv(key, value)
-	}
 
 	if len(os.Args) < 2 {
 		log.Fatal("Critical error: No target application command provided. Usage: envgate-agent <command> [args...]")
@@ -69,7 +76,11 @@ func main() {
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
 
-	cmd.Env = os.Environ()
+	childEnv := os.Environ()
+	for key, value := range res.Variables {
+		childEnv = append(childEnv, fmt.Sprintf("%s=%s", key, value))
+	}
+	cmd.Env = childEnv
 
 	if err := cmd.Run(); err != nil {
 		if exitError, ok := err.(*exec.ExitError); ok {

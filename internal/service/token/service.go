@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/whenipush/envgate/internal/entity"
 	"github.com/whenipush/envgate/internal/pkg/crypto"
@@ -15,10 +16,11 @@ type Repository interface {
 	Get(ctx context.Context, bucket entity.Bucket, key []byte) ([]byte, error)
 	Put(ctx context.Context, bucket entity.Bucket, key []byte, value []byte) error
 	Delete(ctx context.Context, bucket entity.Bucket, key []byte) error
+	Scan(ctx context.Context, bucket entity.Bucket, cb func(k, v []byte) error) error
 }
 
 type ProjectProvider interface {
-	GetProject(ctx context.Context, name []byte) (*entity.Project, error)
+	GetProject(ctx context.Context, name string) (*entity.Project, error)
 }
 
 type service struct {
@@ -35,9 +37,8 @@ func NewService(repo Repository, projectSvc ProjectProvider, masterKey []byte) *
 	}
 }
 
-// GenerateToken создает уникальный токен и привязывает к нему метаданные доступа
-func (s *service) GenerateToken(ctx context.Context, projectName string, environment string) (string, error) {
-	proj, err := s.projectSvc.GetProject(ctx, []byte(projectName))
+func (s *service) GenerateToken(ctx context.Context, projectName string, environment string, user string) (string, error) {
+	proj, err := s.projectSvc.GetProject(ctx, projectName)
 	if err != nil {
 		return "", fmt.Errorf("project validation failed: %w", err)
 	}
@@ -62,6 +63,8 @@ func (s *service) GenerateToken(ctx context.Context, projectName string, environ
 	meta := entity.TokenMeta{
 		ProjectName: projectName,
 		Environment: environment,
+		User:        user,
+		CreatedAt:   time.Now(),
 	}
 
 	plaintext, err := json.Marshal(meta)
@@ -82,7 +85,6 @@ func (s *service) GenerateToken(ctx context.Context, projectName string, environ
 	return tokenStr, nil
 }
 
-// GetTokenMeta проверяет токен и возвращает расшифрованные метаданные
 func (s *service) GetTokenMeta(ctx context.Context, tokenStr string) (*entity.TokenMeta, error) {
 	encryptedData, err := s.repo.Get(ctx, entity.BucketTokens, []byte(tokenStr))
 	if err != nil {
@@ -104,6 +106,34 @@ func (s *service) GetTokenMeta(ctx context.Context, tokenStr string) (*entity.To
 
 	return &meta, nil
 }
+
 func (s *service) RevokeToken(ctx context.Context, token string) error {
 	return s.repo.Delete(ctx, entity.BucketTokens, []byte(token))
+}
+
+func (s *service) ListTokens(ctx context.Context, projectName string) (map[string]*entity.TokenMeta, error) {
+	tokens := make(map[string]*entity.TokenMeta)
+
+	err := s.repo.Scan(ctx, entity.BucketTokens, func(k, v []byte) error {
+		decryptedData, err := crypto.Decrypt(v, s.masterKey)
+		if err != nil {
+			return nil
+		}
+
+		var meta entity.TokenMeta
+		if err := json.Unmarshal(decryptedData, &meta); err != nil {
+			return nil
+		}
+
+		if meta.ProjectName == projectName {
+			tokens[string(k)] = &meta
+		}
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return tokens, nil
 }

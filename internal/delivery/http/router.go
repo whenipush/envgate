@@ -34,9 +34,11 @@ func NewRouter(projectSvc handler.ProjectService, tokenSvc handler.TokenService,
 		admin.GET("/projects", h.ListProjects)
 		admin.GET("/projects/:name", h.GetProject)
 		admin.POST("/projects", h.CreateProject)
-		admin.POST("/projects/:name", h.UpdateProject)
+		admin.POST("/projects/:name", h.UpdateProjectEnv)
 		admin.DELETE("/projects/:name", h.DeleteProject)
+
 		admin.POST("/tokens", h.GenerateToken)
+		admin.DELETE("/tokens/:token", h.RevokeToken)
 	}
 
 	r.GET("/", func(c *gin.Context) {

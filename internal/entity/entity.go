@@ -1,5 +1,9 @@
 package entity
 
+import (
+	"time"
+)
+
 type Bucket []byte
 
 var (
@@ -17,6 +21,8 @@ type Project struct {
 }
 
 type TokenMeta struct {
-	ProjectName string `json:"project_name"`
-	Environment string `json:"environment"`
+	ProjectName string    `json:"project_name"`
+	Environment string    `json:"environment"`
+	User        string    `json:"user"`
+	CreatedAt   time.Time `json:"created_at"`
 }

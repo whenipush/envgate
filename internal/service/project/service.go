@@ -28,8 +28,8 @@ func NewService(repo Repository, masterKey []byte) *service {
 	}
 }
 
-func (s *service) GetProject(ctx context.Context, name []byte) (*entity.Project, error) {
-	encryptedData, err := s.repo.Get(ctx, entity.BucketProjects, name)
+func (s *service) GetProject(ctx context.Context, name string) (*entity.Project, error) {
+	encryptedData, err := s.repo.Get(ctx, entity.BucketProjects, []byte(name))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get project from repo: %w", err)
 	}
@@ -44,6 +44,7 @@ func (s *service) GetProject(ctx context.Context, name []byte) (*entity.Project,
 	}
 
 	var project entity.Project
+
 	if err := json.Unmarshal(decryptedData, &project); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal project JSON: %w", err)
 	}
@@ -51,15 +52,20 @@ func (s *service) GetProject(ctx context.Context, name []byte) (*entity.Project,
 	return &project, nil
 }
 
-func (s *service) SaveProject(ctx context.Context, project *entity.Project) error {
+func (s *service) SaveProject(ctx context.Context, name string, environments map[string]*entity.ProjectEnv) error {
 
-	existingData, err := s.repo.Get(ctx, entity.BucketProjects, []byte(project.Name))
+	existingData, err := s.repo.Get(ctx, entity.BucketProjects, []byte(name))
 	if err != nil {
 		return fmt.Errorf("failed to check existing project: %w", err)
 	}
 
 	if existingData != nil {
-		return fmt.Errorf("project with name '%s' already exists", project.Name)
+		return fmt.Errorf("project with name '%s' already exists", name)
+	}
+
+	project := entity.Project{
+		Name:         name,
+		Environments: environments,
 	}
 
 	plaintext, err := json.Marshal(project)
@@ -72,11 +78,11 @@ func (s *service) SaveProject(ctx context.Context, project *entity.Project) erro
 		return err
 	}
 
-	return s.repo.Put(ctx, entity.BucketProjects, []byte(project.Name), encryptedData)
+	return s.repo.Put(ctx, entity.BucketProjects, []byte(name), encryptedData)
 }
 
-func (s *service) UpdateProjectEnv(ctx context.Context, oldName string, newName *string, newEnvironments map[string]*entity.ProjectEnv) error {
-	encryptedData, err := s.repo.Get(ctx, entity.BucketProjects, []byte(oldName))
+func (s *service) UpdateProjectEnv(ctx context.Context, name string, newEnvironments map[string]*entity.ProjectEnv) error {
+	encryptedData, err := s.repo.Get(ctx, entity.BucketProjects, []byte(name))
 	if err != nil {
 		return fmt.Errorf("failed to get project: %w", err)
 	}
@@ -92,10 +98,6 @@ func (s *service) UpdateProjectEnv(ctx context.Context, oldName string, newName 
 	var proj entity.Project
 	if err := json.Unmarshal(decryptedData, &proj); err != nil {
 		return fmt.Errorf("failed to unmarshal project data: %w", err)
-	}
-
-	if newName != nil && *newName != "" && oldName != *newName {
-		proj.Name = *newName
 	}
 
 	if newEnvironments != nil {
@@ -120,11 +122,6 @@ func (s *service) UpdateProjectEnv(ctx context.Context, oldName string, newName 
 	if err := s.repo.Put(ctx, entity.BucketProjects, []byte(proj.Name), cryptedData); err != nil {
 		return fmt.Errorf("failed to save updated project: %w", err)
 	}
-	if newName != nil && oldName != *newName {
-		if err := s.repo.Delete(ctx, entity.BucketProjects, []byte(oldName)); err != nil {
-			return fmt.Errorf("failed to delete old project key: %w", err)
-		}
-	}
 
 	return nil
 }
@@ -139,7 +136,7 @@ func (s *service) ListProjectsWithEnvs(ctx context.Context) (map[string][]string
 	result := make(map[string][]string)
 
 	for _, key := range keys {
-		proj, err := s.GetProject(ctx, key)
+		proj, err := s.GetProject(ctx, string(key))
 		if err != nil {
 			continue
 		}
@@ -155,6 +152,6 @@ func (s *service) ListProjectsWithEnvs(ctx context.Context) (map[string][]string
 	return result, nil
 }
 
-func (s *service) DeleteProject(ctx context.Context, name []byte) error {
-	return s.repo.Delete(ctx, entity.BucketProjects, name)
+func (s *service) DeleteProject(ctx context.Context, name string) error {
+	return s.repo.Delete(ctx, entity.BucketProjects, []byte(name))
 }
